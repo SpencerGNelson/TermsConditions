@@ -1,3 +1,4 @@
+document.querySelector('#summarizeButton').addEventListener('click', summarizeTerms);
 // Comprehensive keyword list for T&C variations
 const tcKeywords = [
     "terms", "conditions", "terms of service", "terms of use", "user agreement",
@@ -7,6 +8,7 @@ const tcKeywords = [
 const tcRegex = new RegExp(tcKeywords.join("|"), "i");
 
 async function summarizeTerms() {
+    console.log("Starting summarization");
     document.getElementById("loading").style.display = "block";
     document.getElementById("error").style.display = "none";
     document.getElementById("summary").value = "";
@@ -41,7 +43,7 @@ async function summarizeTerms() {
         }
 
         // Send text to backend
-        const apiResponse = await fetch("http://localhost:8000/summarize", {
+        const apiResponse = await fetch("/summarize", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text })
