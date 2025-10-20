@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T&C Summarizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <input type="text" id="tcUrl" placeholder="Enter T&C URL (optional)">
+    <button onclick="summarizeTerms()">Summarize Terms & Conditions</button>
+    <textarea id="summary" readonly></textarea>
+    <div id="loading">Loading...</div>
+    <p id="error"></p>
+    <script src="index.js"></script>
+</body>
+</html>

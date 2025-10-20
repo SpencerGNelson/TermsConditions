@@ -1,0 +1,10 @@
+{
+    "manifest_version": 3,
+    "name": "T&C Summarizer",
+    "version": "1.0",
+    "description": "Summarizes Terms and Conditions from a webpage's footer or elsewhere",
+    "permissions": ["activeTab", "scripting"],
+    "action": {
+        "default_popup": "popup.html"
+    }
+}
