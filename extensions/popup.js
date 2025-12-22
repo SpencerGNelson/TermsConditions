@@ -1,11 +1,24 @@
 document.querySelector('#summarizeButton').addEventListener('click', summarizeTerms);
 // Comprehensive keyword list for T&C variations
-const tcKeywords = [
-    "terms", "conditions", "terms of service", "terms of use", "user agreement",
-    "legal", "policy", "contract", "tos", "t&c", "terms and conditions",
-    "eula", "service agreement", "conditions of use", "user terms", "agreement"
-];
-const tcRegex = new RegExp(tcKeywords.join("|"), "i");
+const tcConfig = {
+    keywords: [
+        "terms of service",
+        "terms and conditions",
+        "terms of use",
+        "user agreement",
+        "service agreement",
+        "eula",
+        "tos"
+    ],
+    negativeKeywords: ["privacy", "cookie", "gdpr", "ccpa"]
+}
+
+tcConfig.urlPatterns = {
+    exact: tcConfig.keywords.map(k => k.toLowerCase().replace(/\s+/g, '-')),
+    partial: ["terms", "tos", "agreement", "eula"]
+};
+
+tcConfig.textRegex = new RegExp(tcConfig.keywords.join("|"), "i");
 
 async function summarizeTerms() {
     console.log("Starting summarization");
@@ -18,12 +31,13 @@ async function summarizeTerms() {
         const tcUrl = document.getElementById("tcUrl").value;
         let text = "";
         let source = "manual";
+        const parser = new DOMParser();
+
 
         if (tcUrl) {
             // Fetch T&C page content
             const response = await fetch(tcUrl);
             const html = await response.text();
-            const parser = new DOMParser();
             const doc = parser.parseFromString(html, "text/html");
             text = extractTermsText(doc);
             source = "manual URL";
@@ -36,6 +50,19 @@ async function summarizeTerms() {
             });
             text = response[0].result.text;
             source = response[0].result.source;
+
+            if (text.startsWith("FETCH")) {
+                const linkUrl = text.substring(6);
+                const linkResponse = await fetch(linkUrl);
+                const linkHtml = await linkResponse.text();
+                const linkDoc = parser.parseFromString(linkHtml, "text/html");
+                text = linkDoc.body.innerText.substring(0, 4000);
+                source = `linked page: ${linkUrl}`;
+            }
+
+            if (!text) {
+                throw new Error("No Terms & Conditions content found");
+            }
         }
 
         if (!text) {
@@ -77,14 +104,13 @@ function extractTermsText(doc = document) {
             const linkText = link.innerText.toLowerCase();
             const href = link.href.toLowerCase();
             let score = 0;
-            tcKeywords.forEach(keyword => {
-                if (linkText.includes(keyword) || href.includes(keyword)) {
-                    score += linkText.includes(keyword) ? 2 : 1;
+            score += analyzeUrlForTC(link.href);
+
+            for (const keyword of tcConfig.keywords) {
+                if (linkText.includes(keyword)) {
+                    score += 10;
+                    break;
                 }
-            });
-            // Boost score if near other legal terms
-            if (linkText.includes("privacy") || href.includes("privacy")) {
-                score += 1;
             }
             if (score > 0) {
                 candidates.push({ type: "link", element: link, score, href: link.href });
@@ -95,11 +121,11 @@ function extractTermsText(doc = document) {
         for (const element of textElements) {
             const elementText = element.innerText.toLowerCase();
             let score = 0;
-            tcKeywords.forEach(keyword => {
+            for (const keyword of tcConfig.keywords) {
                 if (elementText.includes(keyword)) {
                     score += 2;
                 }
-            });
+            };
             if (score > 0) {
                 candidates.push({ type: "text", element, score, text: element.innerText.trim() });
             }
@@ -110,13 +136,19 @@ function extractTermsText(doc = document) {
     const allLinks = doc.querySelectorAll("a");
     for (const link of allLinks) {
         const linkText = link.innerText.toLowerCase();
-        const href = link.href.toLowerCase();
         let score = 0;
-        tcKeywords.forEach(keyword => {
-            if (linkText.includes(keyword) || href.includes(keyword)) {
-                score += linkText.includes(keyword) ? 1 : 0.5;
+
+        // URL pattern analysis
+        score += analyzeUrlForTC(link.href);
+
+        // Text-based keyword matching (lower confidence than footer)
+        for (const keyword of tcConfig.keywords) {
+            if (linkText.includes(keyword)) {
+                score += 3;  // Lower confidence for page-wide links
+                break;
             }
-        });
+        }
+
         if (score > 0 && !footer?.contains(link)) {
             candidates.push({ type: "link", element: link, score, href: link.href });
         }
@@ -125,11 +157,11 @@ function extractTermsText(doc = document) {
     for (const element of allTextElements) {
         const elementText = element.innerText.toLowerCase();
         let score = 0;
-        tcKeywords.forEach(keyword => {
+        for (const keyword of tcConfig.keywords) {
             if (elementText.includes(keyword)) {
                 score += 1;
             }
-        });
+        };
         if (score > 0 && !footer?.contains(element)) {
             candidates.push({ type: "text", element, score, text: element.innerText.trim() });
         }
@@ -148,4 +180,36 @@ function extractTermsText(doc = document) {
 
     // Fallback: return empty with page-wide source
     return { text: "", source: "page-wide search" };
+}
+function analyzeUrlForTC(url) {
+    if (!url) return 0;
+
+    const urlLower = url.toLowerCase();
+    let score = 0;
+
+    for (const pattern of tcConfig.urlPatterns.exact) {
+        const regex = new RegExp(`\\/${pattern}(\\.html|\\.htm|\\.php|\\.aspx?)?$`, 'i');
+        if (regex.test(urlLower)) {
+            score += 8;
+            break;
+        }
+    }
+
+    if (score === 0) {
+        for (const pattern of tcConfig.urlPatterns.partial) {
+            if (urlLower.includes(`/${pattern}`) || urlLower.includes(`/${pattern}-`)) {
+                score += 5;
+                break;
+            }
+        }
+    }
+
+    for (const keyword of tcConfig.negativeKeywords) {
+        if (urlLower.includes(keyword)) {
+            score -= 5;
+            break;
+        }
+    }
+
+    return score;
 }
