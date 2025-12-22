@@ -4,6 +4,7 @@
     "version": "1.0",
     "description": "Summarizes Terms and Conditions from a webpage's footer or elsewhere",
     "permissions": ["activeTab", "scripting"],
+    "host_permissions": ["<all_urls>"],
     "action": {
         "default_popup": "popup.html",
         "default_scripts": ["popup.js"]

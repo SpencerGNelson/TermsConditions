@@ -56,7 +56,25 @@ async function summarizeTerms() {
                 const linkResponse = await fetch(linkUrl);
                 const linkHtml = await linkResponse.text();
                 const linkDoc = parser.parseFromString(linkHtml, "text/html");
-                text = linkDoc.body.innerText.substring(0, 4000);
+
+                // Try to find main content container
+                let mainContent = linkDoc.querySelector('article, main, [role="main"], .main-content, #main-content, .post-content, .entry-content');
+
+                if (mainContent) {
+                    text = mainContent.innerText.substring(0, 4000);
+                } else {
+                    // Fallback: get paragraphs, excluding header/footer/nav
+                    const allParagraphs = Array.from(linkDoc.querySelectorAll('p'));
+                    const contentParagraphs = allParagraphs.filter(p => {
+                        // Exclude if inside header/footer/nav
+                        if (p.closest('header, footer, nav')) return false;
+                        // Exclude very short paragraphs (likely menu items)
+                        if (p.innerText.trim().length < 50) return false;
+                        return true;
+                    });
+                    text = contentParagraphs.map(p => p.innerText).join('\n').substring(0, 4000);
+                }
+
                 source = `linked page: ${linkUrl}`;
             }
 
@@ -70,7 +88,7 @@ async function summarizeTerms() {
         }
 
         // Send text to backend
-        const apiResponse = await fetch("/summarize", {
+        const apiResponse = await fetch("http://localhost:8000/summarize", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text })
@@ -93,6 +111,59 @@ async function summarizeTerms() {
 }
 
 function extractTermsText(doc = document) {
+    // Inline config (self-contained for content script injection)
+    const tcConfig = {
+        keywords: [
+            "terms of service",
+            "terms and conditions",
+            "terms of use",
+            "user agreement",
+            "service agreement",
+            "eula",
+            "tos"
+        ],
+        negativeKeywords: ["privacy", "cookie", "gdpr", "ccpa"]
+    };
+
+    tcConfig.urlPatterns = {
+        exact: tcConfig.keywords.map(k => k.toLowerCase().replace(/\s+/g, '-')),
+        partial: ["terms", "tos", "agreement", "eula"]
+    };
+
+    // Inline URL analyzer function
+    function analyzeUrlForTC(url) {
+        if (!url) return 0;
+
+        const urlLower = url.toLowerCase();
+        let score = 0;
+
+        for (const pattern of tcConfig.urlPatterns.exact) {
+            const regex = new RegExp(`\\/${pattern}(\\.html|\\.htm|\\.php|\\.aspx?)?$`, 'i');
+            if (regex.test(urlLower)) {
+                score += 8;
+                break;
+            }
+        }
+
+        if (score === 0) {
+            for (const pattern of tcConfig.urlPatterns.partial) {
+                if (urlLower.includes(`/${pattern}`) || urlLower.includes(`/${pattern}-`)) {
+                    score += 5;
+                    break;
+                }
+            }
+        }
+
+        for (const keyword of tcConfig.negativeKeywords) {
+            if (urlLower.includes(keyword)) {
+                score -= 5;
+                break;
+            }
+        }
+
+        return score;
+    }
+
     // Heuristic scoring for T&C content
     const candidates = [];
     const footer = doc.querySelector("footer");
