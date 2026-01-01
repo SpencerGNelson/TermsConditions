@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from transformers import pipeline
 import re
 
+#uvicorn backend.main:app --reload --port 8000
+
+
 app = FastAPI()
 
 app.add_middleware(
