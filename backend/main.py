@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+summarizer = pipeline("summarization", model="nsi319/legal-led-base-16384")
 
 class TextInput(BaseModel):
     text: str
@@ -25,8 +25,18 @@ class TextInput(BaseModel):
 def preprocess_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)  
     text = re.sub(r"\s+", " ", text).strip()  
-    return text[:4000] 
- 
+    return text[:60000] 
+
+def clean_summary(text: str) -> str:
+    text = text.strip()
+
+    if text and text[-1] not in '.!?':
+        last_period = max(text.rfind('.'), text.rfind('!'), text.rfind('?'))
+        if last_period > 0:
+            text = text[:last_period + 1]
+    
+    return text.strip()
+
 @app.post("/summarize")
 async def summarize_text(input: TextInput):
     try:
@@ -34,8 +44,18 @@ async def summarize_text(input: TextInput):
         if not cleaned_text:
             return {"error": "No valid text provided"}
 
-        summary = summarizer(cleaned_text, max_length=150, min_length=50, do_sample=False)
-        return {"summary": summary[0]["summary_text"]}
+        summary = summarizer(cleaned_text,
+            max_length=220,
+            min_length=75,
+            do_sample=True,
+            repetition_penalty=2.5,
+            length_penalty=1.0,
+            num_beams=4,
+            early_stopping=True,
+            truncation=True)
+        summary_text = summary[0]["summary_text"]
+        summary_text = clean_summary(summary_text)
+        return {"summary": summary_text}
     except Exception as e:
         return {"error": f"Summarization failed: {str(e)}"}
 
