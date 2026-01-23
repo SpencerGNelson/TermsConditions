@@ -1,5 +1,12 @@
 document.querySelector('#summarizeButton').addEventListener('click', summarizeTerms);
+const CONFIG = {
+    API_BASE_URL: "http://localhost:8000",
+    API_TIMEOUT_MS: 30000,
+    MAX_CONTENT_LENGTH: 4000,
+    FETCH_PREFIX: "FETCH:"
+}
 // Comprehensive keyword list for T&C variations
+//3-21 to be used for potential future use outside of content scripts
 const tcConfig = {
     keywords: [
         "terms of service",
@@ -39,20 +46,21 @@ async function summarizeTerms() {
             const response = await fetch(tcUrl);
             const html = await response.text();
             const doc = parser.parseFromString(html, "text/html");
-            text = extractTermsText(doc);
+            text = extractTermsText(doc, { fetchPrefix: CONFIG.FETCH_PREFIX, maxLength: CONFIG.MAX_CONTENT_LENGTH});
             source = "manual URL";
         } else {
             // Get text from active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             const response = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
-                function: extractTermsText
+                function: extractTermsText,
+                args:  [null, { fetchPrefix: CONFIG.FETCH_PREFIX, maxLength: CONFIG.MAX_CONTENT_LENGTH}]
             });
             text = response[0].result.text;
             source = response[0].result.source;
 
-            if (text.startsWith("FETCH")) {
-                const linkUrl = text.substring(6);
+            if (text.startsWith(CONFIG.FETCH_PREFIX)) {
+                const linkUrl = text.substring(CONFIG.FETCH_PREFIX.length);
                 const linkResponse = await fetch(linkUrl);
                 const linkHtml = await linkResponse.text();
                 const linkDoc = parser.parseFromString(linkHtml, "text/html");
@@ -61,7 +69,7 @@ async function summarizeTerms() {
                 let mainContent = linkDoc.querySelector('article, main, [role="main"], .main-content, #main-content, .post-content, .entry-content');
 
                 if (mainContent) {
-                    text = mainContent.innerText.substring(0, 4000);
+                    text = mainContent.innerText.substring(0, CONFIG.MAX_CONTENT_LENGTH);
                 } else {
                     // Fallback: get paragraphs, excluding header/footer/nav
                     const allParagraphs = Array.from(linkDoc.querySelectorAll('p'));
@@ -72,7 +80,7 @@ async function summarizeTerms() {
                         if (p.innerText.trim().length < 50) return false;
                         return true;
                     });
-                    text = contentParagraphs.map(p => p.innerText).join('\n').substring(0, 4000);
+                    text = contentParagraphs.map(p => p.innerText).join('\n').substring(0, CONFIG.MAX_CONTENT_LENGTH);
                 }
 
                 source = `linked page: ${linkUrl}`;
@@ -88,7 +96,7 @@ async function summarizeTerms() {
         }
 
         // Send text to backend
-        const apiResponse = await fetch("http://localhost:8000/summarize", {
+        const apiResponse = await fetch(`${CONFIG.API_BASE_URL}/summarize`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text })
@@ -110,8 +118,9 @@ async function summarizeTerms() {
     }
 }
 
-function extractTermsText(doc = document) {
-    // Inline config (self-contained for content script injection)
+function extractTermsText(doc, config) {
+    doc = doc || document;
+    config = config || { fetchPrefix: "FETCH:", maxLength: 4000 };    // Inline config (self-contained for content script injection)
     const tcConfig = {
         keywords: [
             "terms of service",
@@ -244,43 +253,14 @@ function extractTermsText(doc = document) {
         const bestCandidate = candidates[0];
         if (bestCandidate.type === "link") {
             // Indicate link for fetching (handled in summarizeTerms)
-            return { text: `FETCH:${bestCandidate.href}`, source: "footer link" };
+            return { text: `${config.fetchPrefix}${bestCandidate.href}`, source: "footer link" };
         }
-        return { text: bestCandidate.text.substring(0, 4000), source: "footer text" };
+        return { text: bestCandidate.text.substring(0, config.maxLength), source: "footer text" };
     }
 
     // Fallback: return empty with page-wide source
     return { text: "", source: "page-wide search" };
 }
-function analyzeUrlForTC(url) {
-    if (!url) return 0;
 
-    const urlLower = url.toLowerCase();
-    let score = 0;
 
-    for (const pattern of tcConfig.urlPatterns.exact) {
-        const regex = new RegExp(`\\/${pattern}(\\.html|\\.htm|\\.php|\\.aspx?)?$`, 'i');
-        if (regex.test(urlLower)) {
-            score += 8;
-            break;
-        }
-    }
-
-    if (score === 0) {
-        for (const pattern of tcConfig.urlPatterns.partial) {
-            if (urlLower.includes(`/${pattern}`) || urlLower.includes(`/${pattern}-`)) {
-                score += 5;
-                break;
-            }
-        }
-    }
-
-    for (const keyword of tcConfig.negativeKeywords) {
-        if (urlLower.includes(keyword)) {
-            score -= 5;
-            break;
-        }
-    }
-
-    return score;
-}
+//Working on Task 5
