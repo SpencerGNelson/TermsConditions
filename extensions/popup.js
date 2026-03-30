@@ -114,7 +114,9 @@ async function summarizeTerms() {
         try {
             const apiResponse = await fetch(`${CONFIG.API_BASE_URL}/summarize`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {  "Content-Type": "application/json",
+                            "X-API-Key": "your-secret-here"
+                 },
                 body: JSON.stringify({ text })
              });
              clearTimeout(timeoutId);

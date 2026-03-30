@@ -16,12 +16,14 @@ api_secret = os.getenv("API_SECRET")
 
 app = FastAPI()
 
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=allowed_origins,  
     allow_credentials=True,
     allow_methods=["POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type","X-API-Key"],
 )
 
 summarizer = pipeline("summarization", model="nsi319/legal-led-base-16384")
