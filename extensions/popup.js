@@ -5,6 +5,11 @@ const CONFIG = {
     MAX_CONTENT_LENGTH: 4000,
     FETCH_PREFIX: "FETCH:"
 }
+function showError(message) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("error").style.display = message;
+    document.getElementById("error").style.display = "block";
+}
 // Comprehensive keyword list for T&C variations
 //3-21 to be used for potential future use outside of content scripts
 const tcConfig = {
@@ -41,8 +46,13 @@ async function summarizeTerms() {
         const parser = new DOMParser();
 
 
-        if (tcUrl) {
+        if (tcUrl) { 
             // Fetch T&C page content
+            try {
+                new URL(tcUrl);
+            } catch {
+                throw new Error("Invalid URL format. Please enter a valid URL.");
+            }
             const response = await fetch(tcUrl);
             const html = await response.text();
             const doc = parser.parseFromString(html, "text/html");
@@ -96,26 +106,55 @@ async function summarizeTerms() {
         }
 
         // Send text to backend
-        const apiResponse = await fetch(`${CONFIG.API_BASE_URL}/summarize`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text })
-        });
+        //step 3
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.API_TIMEOUT_MS);
+
+        let apiResponse;
+        try {
+            const apiResponse = await fetch(`${CONFIG.API_BASE_URL}/summarize`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text })
+             });
+             clearTimeout(timeoutId);
+        } catch {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error("Request timed out. The server may be busy or unavailable");
+            }
+            throw error;
+        }
+            
+            // step 4
+        if (!apiResponse.ok) {
+            if (apiResponse.status === 404) {
+                throw new Error("API endpoint not found. Check server configuration");
+            }
+            if (apiResponse.status >= 500) {
+                throw new Error(`Server error (${apiResponse.status}). Please try again later.`);
+            }
+            throw new Error(`Request  failed with status ${apiResponse.status}`);
+        }
         const data = await apiResponse.json();
 
         // Display result or error
         document.getElementById("loading").style.display = "none";
         if (data.error) {
-            document.getElementById("error").textContent = data.error;
-            document.getElementById("error").style.display = "block";
+           showError(data.error);
         } else {
             document.getElementById("summary").value = `Source: ${source}\n\n${data.summary}`;
         }
     } catch (error) {
-        document.getElementById("loading").style.display = "none";
-        document.getElementById("error").textContent = `Error: ${error.message}`;
-        document.getElementById("error").style.display = "block";
+        if (error.name === 'AbortError') {
+        showError(`Error: ${error.message}`)
+        }
+        if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+            throw new Error("Cannot connect to server. Is the backend running?"); //3-05-26 system is crashing at this error
+        }
+        throw error;
     }
+
 }
 
 function extractTermsText(doc, config) {
@@ -262,5 +301,3 @@ function extractTermsText(doc, config) {
     return { text: "", source: "page-wide search" };
 }
 
-
-//Working on Task 5

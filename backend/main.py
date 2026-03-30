@@ -3,9 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import pipeline
 import re
+import os
+from dotenv import load_dotenv
 
 #uvicorn backend.main:app --reload --port 8000
+'''
+load_dotenv()  # reads your .env file and loads the variables
 
+api_key = os.getenv("ANTHROPIC_API_KEY")
+api_secret = os.getenv("API_SECRET")
+'''
 
 app = FastAPI()
 
