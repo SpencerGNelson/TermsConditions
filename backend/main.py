@@ -34,7 +34,7 @@ class TextInput(BaseModel):
 def preprocess_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)  
     text = re.sub(r"\s+", " ", text).strip()  
-    return text[:60000] 
+    return text[:16000] 
 
 def clean_summary(text: str) -> str:
     text = text.strip()
@@ -53,9 +53,13 @@ async def summarize_text(input: TextInput):
         if not cleaned_text:
             return {"error": "No valid text provided"}
 
+        print("=== INPUT TEXT ===")
+        print(cleaned_text)
+        print("=== END INPUT TEXT ===")
+
         summary = summarizer(cleaned_text,
-            max_length=220,
-            min_length=75,
+            max_length=300,
+            min_length=100,
             do_sample=True,
             repetition_penalty=2.5,
             length_penalty=1.0,

@@ -112,7 +112,7 @@ async function summarizeTerms() {
 
         let apiResponse;
         try {
-            const apiResponse = await fetch(`${CONFIG.API_BASE_URL}/summarize`, {
+            apiResponse = await fetch(`${CONFIG.API_BASE_URL}/summarize`, {
                 method: "POST",
                 headers: {  "Content-Type": "application/json",
                             "X-API-Key": "your-secret-here"
@@ -120,7 +120,7 @@ async function summarizeTerms() {
                 body: JSON.stringify({ text })
              });
              clearTimeout(timeoutId);
-        } catch {
+        } catch (error) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {
                 throw new Error("Request timed out. The server may be busy or unavailable");
