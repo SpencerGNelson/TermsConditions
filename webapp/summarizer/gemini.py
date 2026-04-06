@@ -1,12 +1,8 @@
 import os
-import google.generativeai as genai
 import json
+from google import genai
 
-gemini_key = os.getenv('GEMINI_API_KEY')
-
-genai.configure(api_key=gemini_key)
-
-model = genai.GenerativeModel('gemini-1.5-flash')
+client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 
 def summarize_terms(text):
     prompt = f"""
@@ -16,7 +12,10 @@ def summarize_terms(text):
     Keep each field to a few concise bullet points and only return the JSON.
     Terms and Conditions: {text}
 """
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
+    )
     raw = response.text
     cleaned = raw.replace('```json', '').replace('```', '').strip()
     return json.loads(cleaned)
