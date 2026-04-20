@@ -16,9 +16,9 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from summarizer.views import summarize
-
+from summarizer.views import summarize, search
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/summarize/', summarize, name='summarize')
+    path('api/summarize/', summarize, name='summarize'),
+    path('api/search/', search, name='search')
 ]
